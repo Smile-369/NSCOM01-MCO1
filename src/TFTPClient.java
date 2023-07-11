@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.util.Arrays;
 import javax.swing.*;
 
 public class TFTPClient {
@@ -23,27 +24,147 @@ public class TFTPClient {
     }
 
     public void uploadFile(String localFile, String remoteFile) {
-        // TODO: Implement file upload logic
-        // Hint: Read the local file using FileInputStream
-        // Hint: Create a write request packet using createWriteRequestPacket() method
-        // Hint: Send the write request packet to the server using sendPacket() method
-        // Hint: Receive ACK packets and send data packets to the server
-        // Hint: Handle timeouts, duplicate ACKs, and errors
+        try (FileInputStream fileInputStream = new FileInputStream(localFile)) {
+            // Create a write request packet
+            DatagramPacket writeRequestPacket = createWriteRequestPacket(remoteFile);
+            // Send the write request packet to the server
+            sendPacket(writeRequestPacket);
+
+            byte[] buffer = new byte[MAX_PACKET_SIZE - 4];
+            int bytesRead;
+            int blockNumber = 1;
+
+            while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+                // Create a data packet
+                DatagramPacket dataPacket = createDataPacket(buffer, blockNumber);
+                // Send the data packet to the server
+                sendPacket(dataPacket);
+
+                // Wait for ACK packet
+                DatagramPacket ackPacket = receivePacket();
+
+                // Check if received ACK packet is valid
+                if (isValidACKPacket(ackPacket, blockNumber)) {
+                    blockNumber++;
+                } else {
+                    // Handle duplicate ACK or invalid ACK packet
+                    // Resend the previous data packet
+                    sendPacket(dataPacket);
+                }
+
+                // Clear the buffer
+                buffer = new byte[MAX_PACKET_SIZE - 4];
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
+    private boolean isValidACKPacket(DatagramPacket packet, int expectedBlockNumber) {
+        if (packet.getLength() != 4) {
+            return false;
+        }
+
+        byte[] data = packet.getData();
+        int opcode = (data[0] & 0xff) << 8 | (data[1] & 0xff);
+        int receivedBlockNumber = (data[2] & 0xff) << 8 | (data[3] & 0xff);
+
+        return opcode == 4 && receivedBlockNumber == expectedBlockNumber;
+    }
+
+
     public void downloadFile(String remoteFile, String localFile) {
-        // TODO: Implement file download logic
-        // Hint: Create a read request packet using createReadRequestPacket() method
-        // Hint: Send the read request packet to the server using sendPacket() method
-        // Hint: Receive data packets from the server and write them to the local file
-        // Hint: Send ACK packets for each received data packet
-        // Hint: Handle timeouts, duplicate data packets, and errors
+        try (FileOutputStream fileOutputStream = new FileOutputStream(localFile)) {
+            // Create a read request packet
+            DatagramPacket readRequestPacket = createReadRequestPacket(remoteFile);
+            // Send the read request packet to the server
+            sendPacket(readRequestPacket);
+
+            byte[] buffer = new byte[MAX_PACKET_SIZE - 4];
+            int blockNumber = 1;
+
+            while (true) {
+                // Receive data packet
+                DatagramPacket dataPacket = receivePacket();
+
+                // Check for errors
+                if (isErrorPacket(dataPacket)) {
+                    // Handle error packet
+                    displayErrorPacket(dataPacket);
+                    return;
+                }
+
+                // Check if received data packet is valid
+                if (isValidDataPacket(dataPacket, blockNumber)) {
+                    // Write data to the local file
+                    byte[] data = getDataFromPacket(dataPacket);
+                    fileOutputStream.write(data);
+
+                    // Create and send ACK packet
+                    DatagramPacket ackPacket = createACKPacket(blockNumber);
+                    sendPacket(ackPacket);
+
+                    // Check if it's the last data packet
+                    if (data.length < MAX_PACKET_SIZE - 4) {
+                        break;
+                    }
+
+                    blockNumber++;
+                } else {
+                    // Handle duplicate data packet or invalid data packet
+                    // Resend the previous ACK packet
+                    DatagramPacket ackPacket = createACKPacket(blockNumber - 1);
+                    sendPacket(ackPacket);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    private boolean isErrorPacket(DatagramPacket packet) {
+        if (packet.getLength() < 4) {
+            return false;
+        }
+
+        byte[] data = packet.getData();
+        int opcode = (data[0] & 0xff) << 8 | (data[1] & 0xff);
+
+        return opcode == 5;
+    }
+    private boolean isValidDataPacket(DatagramPacket packet, int expectedBlockNumber) {
+        if (packet.getLength() < 4) {
+            return false;
+        }
+
+        byte[] data = packet.getData();
+        int opcode = (data[0] & 0xff) << 8 | (data[1] & 0xff);
+        int receivedBlockNumber = (data[2] & 0xff) << 8 | (data[3] & 0xff);
+
+        return opcode == 3 && receivedBlockNumber == expectedBlockNumber;
+    }
+
+    private void displayErrorPacket(DatagramPacket packet) {
+        byte[] data = packet.getData();
+        int errorCode = (data[2] & 0xff) << 8 | (data[3] & 0xff);
+        String errorMessage = new String(data, 4, packet.getLength() - 4);
+
+        System.out.println("Error Packet:");
+        System.out.println("Error Code: " + errorCode);
+        System.out.println("Error Message: " + errorMessage);
+    }
+
+    private byte[] getDataFromPacket(DatagramPacket packet) {
+        return Arrays.copyOfRange(packet.getData(), 4, packet.getLength());
     }
 
     private void sendPacket(DatagramPacket packet) {
-        // TODO: Implement sending a packet
-        // Hint: Use the socket to send the packet to the server
+        try {
+            socket.send(packet);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
+
 
     private DatagramPacket receivePacket() {
         // TODO: Implement receiving a packet
