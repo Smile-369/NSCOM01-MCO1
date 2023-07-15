@@ -4,6 +4,7 @@ import java.util.Arrays;
 import javax.swing.*;
 
 public class TFTPClient {
+    private static final int MAX_DATA_SIZE = 512;
 
     private static final int TIMEOUT = 5000; // Timeout value in milliseconds
     private static final int MAX_PACKET_SIZE = 516; // Maximum TFTP packet size
@@ -12,21 +13,12 @@ public class TFTPClient {
     private InetAddress serverAddress;
     private int serverPort;
 
-    public TFTPClient(String serverIP) {
-        try {
-            socket = new DatagramSocket();
-            socket.setSoTimeout(TIMEOUT);
-            serverAddress = InetAddress.getByName(serverIP);
-            serverPort = 69; // Default TFTP port
-        } catch (SocketException | UnknownHostException e) {
-            e.printStackTrace();
-        }
-    }
     public TFTPClient(InetAddress serverIP) throws SocketException {
             socket = new DatagramSocket();
             socket.setSoTimeout(TIMEOUT);
             serverAddress = serverIP;
             serverPort = 69; // Default TFTP port
+
     }
 
     public void uploadFile(String localFile, String remoteFile) {
@@ -37,10 +29,9 @@ public class TFTPClient {
             sendPacket(writeRequestPacket);
 
             byte[] buffer = new byte[MAX_PACKET_SIZE - 4];
-            int bytesRead;
             int blockNumber = 1;
 
-            while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+            while (fileInputStream.read(buffer) != -1) {
                 // Create a data packet
                 DatagramPacket dataPacket = createDataPacket(buffer, blockNumber);
                 // Send the data packet to the server
@@ -79,54 +70,60 @@ public class TFTPClient {
     }
 
 
-    public void downloadFile(String remoteFile, String localFile) {
-        try (FileOutputStream fileOutputStream = new FileOutputStream(localFile)) {
-            // Create a read request packet
-            DatagramPacket readRequestPacket = createReadRequestPacket(remoteFile);
-            // Send the read request packet to the server
-            sendPacket(readRequestPacket);
+    public void downloadFile(String remoteFile, String outputFile) {
+        // Create the Read Request packet
+        DatagramPacket requestPacket = createReadRequestPacket(remoteFile);
 
-            byte[] buffer = new byte[MAX_PACKET_SIZE - 4];
+        // Send the Read Request packet to the server
+        sendPacket(requestPacket);
+
+        try (FileOutputStream fos = new FileOutputStream(outputFile)) {
             int blockNumber = 1;
 
             while (true) {
-                // Receive data packet
                 DatagramPacket dataPacket = receivePacket();
 
-                // Check for errors
                 if (isErrorPacket(dataPacket)) {
                     // Handle error packet
                     displayErrorPacket(dataPacket);
-                    return;
+                    break;
                 }
 
-                // Check if received data packet is valid
-                if (isValidDataPacket(dataPacket, blockNumber)) {
-                    // Write data to the local file
+                if (isValidDataPacket(dataPacket,blockNumber)) {
                     byte[] data = getDataFromPacket(dataPacket);
-                    fileOutputStream.write(data);
 
-                    // Create and send ACK packet
-                    DatagramPacket ackPacket = createACKPacket(blockNumber);
-                    sendPacket(ackPacket);
+                    if (getBlockNumber(dataPacket) == blockNumber) {
+                        // Write the data to the output file
+                        fos.write(data);
 
-                    // Check if it's the last data packet
-                    if (data.length < MAX_PACKET_SIZE - 4) {
-                        break;
+                        // Create and send the ACK packet
+                        DatagramPacket ackPacket = createACKPacket(blockNumber);
+                        sendPacket(ackPacket);
+
+                        blockNumber++;
+
+                        // Check if it is the last data packet
+                        if (data.length < MAX_DATA_SIZE) {
+                            break;
+                        }
+                    } else {
+                        // Handle out-of-order data packet
+                        System.out.println("Received out-of-order data packet. Discarding.");
                     }
-
-                    blockNumber++;
-                } else {
-                    // Handle duplicate data packet or invalid data packet
-                    // Resend the previous ACK packet
-                    DatagramPacket ackPacket = createACKPacket(blockNumber - 1);
-                    sendPacket(ackPacket);
                 }
             }
+
+            System.out.println("File downloaded successfully.");
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("An error occurred while downloading the file: " + e.getMessage());
         }
     }
+    private int getBlockNumber(DatagramPacket packet) {
+        byte[] data = packet.getData();
+        int blockNumber = ((data[2] & 0xFF) << 8) | (data[3] & 0xFF);
+        return blockNumber;
+    }
+
     private boolean isErrorPacket(DatagramPacket packet) {
         if (packet.getLength() < 4) {
             return false;
@@ -286,10 +283,7 @@ public class TFTPClient {
 
 
     public static void main(String[] args) {
-        // TODO: Implement the main method to interact with the user and initiate file upload/download
-        // Hint: Create a TFTPClient object and pass the server IP address as an argument to the constructor
-        // Hint: Interact with the user to get the local and remote file names
-        // Hint: Call the uploadFile() or downloadFile() methods based on user input
+
         SwingUtilities.invokeLater(new Runnable() {
             public void run() {
                 TFTPClientGUI gui = new TFTPClientGUI();

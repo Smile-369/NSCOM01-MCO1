@@ -83,9 +83,9 @@ public class TFTPClientGUI extends JFrame {
         try {
             InetAddress serverAddress = InetAddress.getByName(serverIP);
             client = new TFTPClient(serverAddress);
-            JOptionPane.showMessageDialog(this, "Connected to server: " + serverIP);
+            System.out.println( "Connected to server: " + serverIP);
         } catch (UnknownHostException e) {
-            JOptionPane.showMessageDialog(this, "Invalid server IP address", "Connection Error", JOptionPane.ERROR_MESSAGE);
+            System.out.println("Invalid server IP address");
         } catch (SocketException e) {
             throw new RuntimeException(e);
         }
