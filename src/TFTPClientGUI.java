@@ -66,9 +66,11 @@ public class TFTPClientGUI extends JFrame {
                 String serverIP = serverIPField.getText();
                 String localFile = localFileField.getText();
                 String remoteFile = remoteFileField.getText();
-                // Call the downloadFile() method in the TFTPClient class
-                TFTPClient client = connectToServer(serverIP);
-                client.downloadFile(remoteFile, localFile);
+                tftpClient = connectToServer(serverIP);
+                boolean fileNotFound = tftpClient.downloadFile(remoteFile, localFile);
+                if (fileNotFound) {
+                    JOptionPane.showMessageDialog(TFTPClientGUI.this, "File not found on the server", "File Not Found", JOptionPane.ERROR_MESSAGE);
+                }
             }
         });
 
