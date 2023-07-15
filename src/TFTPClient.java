@@ -70,7 +70,13 @@ public class TFTPClient {
     }
 
 
-    public void downloadFile(String remoteFile, String outputFile) {
+   public boolean isFileNotFoundError(DatagramPacket packet) {
+        byte[] data = packet.getData();
+        int errorCode = (data[2] & 0xff) << 8 | (data[3] & 0xff);
+        return errorCode == 1; // Check if the error code is 1 (file not found)
+    }
+
+    public boolean downloadFile(String remoteFile, String outputFile) {
         // Create the Read Request packet
         DatagramPacket requestPacket = createReadRequestPacket(remoteFile);
 
@@ -85,11 +91,16 @@ public class TFTPClient {
 
                 if (isErrorPacket(dataPacket)) {
                     // Handle error packet
-                    displayErrorPacket(dataPacket);
-                    break;
+                    if (isFileNotFoundError(dataPacket)) {
+                        System.out.println("File not found on the server");
+                        return true; // File not found error
+                    } else {
+                        displayErrorPacket(dataPacket);
+                        return false; // Other error occurred
+                    }
                 }
 
-                if (isValidDataPacket(dataPacket,blockNumber)) {
+                if (isValidDataPacket(dataPacket, blockNumber)) {
                     byte[] data = getDataFromPacket(dataPacket);
 
                     if (getBlockNumber(dataPacket) == blockNumber) {
@@ -114,10 +125,13 @@ public class TFTPClient {
             }
 
             System.out.println("File downloaded successfully.");
+            return false; // No error
         } catch (IOException e) {
             System.out.println("An error occurred while downloading the file: " + e.getMessage());
+            return false; // Error occurred
         }
     }
+    
     private int getBlockNumber(DatagramPacket packet) {
         byte[] data = packet.getData();
         int blockNumber = ((data[2] & 0xFF) << 8) | (data[3] & 0xFF);
