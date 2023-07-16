@@ -3,6 +3,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.net.*;
+import java.util.Objects;
 
 public class TFTPClientGUI extends JFrame {
     private JTextField serverIPField;
@@ -36,27 +37,25 @@ public class TFTPClientGUI extends JFrame {
         contentPane.add(Box.createVerticalStrut(10));
         contentPane.add(createFieldPanel("Remote File:", remoteFileField));
         contentPane.add(Box.createVerticalStrut(10));
-        contentPane.add(createButtonPanel(connectButton,uploadButton, downloadButton));
+        contentPane.add(createButtonPanel(uploadButton, downloadButton));
         contentPane.add(Box.createVerticalStrut(10));
 
-        connectButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String serverIP = serverIPField.getText();
-                connectToServer(serverIP);
-            }
-        });
+
 
         // Set up action listeners for the buttons
         uploadButton.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String serverIP = serverIPField.getText();
-                String localFile = localFileField.getText();
-                String remoteFile = remoteFileField.getText();
-                // Call the uploadFile() method in the TFTPClient class
-                TFTPClient client = connectToServer(serverIP);
-                client.uploadFile(localFile, remoteFile);
+                if(!Objects.equals(serverIP, "")){
+                    String localFile = localFileField.getText();
+                    String remoteFile = remoteFileField.getText();
+                    // Call the uploadFile() method in the TFTPClient class
+                    TFTPClient client = connectToServer(serverIP);
+                    client.uploadFile(localFile, remoteFile);
+                }else {
+                    System.out.println("IP not Inputted");
+                }
             }
         });
 
@@ -64,12 +63,13 @@ public class TFTPClientGUI extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 String serverIP = serverIPField.getText();
-                String localFile = localFileField.getText();
-                String remoteFile = remoteFileField.getText();
-                tftpClient = connectToServer(serverIP);
-                boolean fileNotFound = tftpClient.downloadFile(remoteFile, localFile);
-                if (fileNotFound) {
-                    JOptionPane.showMessageDialog(TFTPClientGUI.this, "File not found on the server", "File Not Found", JOptionPane.ERROR_MESSAGE);
+                if(!Objects.equals(serverIP, "")){
+                    String localFile = localFileField.getText();
+                    String remoteFile = remoteFileField.getText();
+                    TFTPClient client = connectToServer(serverIP);
+                    client.downloadFile(remoteFile, localFile);
+                }else {
+                    System.out.println("IP not Inputted");
                 }
             }
         });
